@@ -384,13 +384,16 @@ private uint _ctfeSkipName(ref string op, string name)
 // returns 1 if $(D fun) is trivial n-ary function
 private uint _ctfeMatchNary(string fun, string[] names...)
 {
-    import std.algorithm : reduce;
-
     if (!__ctfe) assert(false);
     fun._ctfeSkipOp();
     for (;;)
     {
-        immutable h = reduce!((a,b) => a + fun._ctfeSkipName(b))(0, names) + fun._ctfeSkipInteger;
+        uint h = 0;
+
+        foreach(name ; names)
+            h += fun._ctfeSkipName(name);
+
+        h += fun._ctfeSkipInteger;
 
         if (h == 0)
         {
