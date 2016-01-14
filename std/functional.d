@@ -455,6 +455,7 @@ unittest {
     static assert(!_ctfeMatchNary("sqrt(a)+b-c", "a", "b", "c"));
     static assert(!_ctfeMatchNary("a.sqrt-c+b", "a", "b", "c"));
     static assert(_ctfeMatchNary("a+b+c", "a", "b", "c"));
+    static assert(_ctfeMatchNary("args.length + args[1] + args[0] + a + b", "b", "a"));
 }
 
 //undocumented
