@@ -6249,9 +6249,16 @@ struct Chunks(Source)
     /// Standard constructor
     this(Source source, size_t chunkSize)
     {
+        this(source, chunkSize, chunkSize);
+    }
+
+    this(Source source, size_t chunkSize, size_t slideSize)
+    {
         assert(chunkSize != 0, "Cannot create a Chunk with an empty chunkSize");
+        assert(slideSize != 0, "Cannot create a Chunk with an empty slideSize");
         _source = source;
         _chunkSize = chunkSize;
+        _slideSize = slideSize;
     }
 
     /// Forward range primitives. Always present.
@@ -6265,7 +6272,7 @@ struct Chunks(Source)
     void popFront()
     {
         assert(!empty);
-        _source.popFrontN(_chunkSize);
+        _source.popFrontN(_slideSize);
     }
 
     static if (!isInfinite!Source)
@@ -6281,7 +6288,7 @@ struct Chunks(Source)
     /// Ditto
     @property typeof(this) save()
     {
-        return typeof(this)(_source.save, _chunkSize);
+        return typeof(this)(_source.save, _chunkSize, _slideSize);
     }
 
     static if (hasLength!Source)
@@ -6332,14 +6339,14 @@ struct Chunks(Source)
                 import std.algorithm : min;
                 assert(lower <= upper && upper <= length, "chunks slicing index out of bounds");
                 immutable len = _source.length;
-                return chunks(_source[min(lower * _chunkSize, len) .. min(upper * _chunkSize, len)], _chunkSize);
+                return chunks(_source[min(lower * _chunkSize, len) .. min(upper * _chunkSize, len)], _chunkSize, _slideSize);
             }
         else static if (hasSliceToEnd)
             //For slicing an infinite chunk, we need to slice the source to the end.
             typeof(takeExactly(this, 0)) opSlice(size_t lower, size_t upper)
             {
                 assert(lower <= upper, "chunks slicing index out of bounds");
-                return chunks(_source[lower * _chunkSize .. $], _chunkSize).takeExactly(upper - lower);
+                return chunks(_source[lower * _chunkSize .. $], _chunkSize, _slideSize).takeExactly(upper - lower);
             }
 
         static if (isInfinite!Source)
@@ -6354,7 +6361,7 @@ struct Chunks(Source)
                 //Slice to dollar
                 typeof(this) opSlice(size_t lower, DollarToken)
                 {
-                    return typeof(this)(_source[lower * _chunkSize .. $], _chunkSize);
+                    return typeof(this)(_source[lower * _chunkSize .. $], _chunkSize, _slideSize);
                 }
             }
         }
@@ -6385,11 +6392,11 @@ struct Chunks(Source)
             typeof(this) opSlice(DollarToken, DollarToken)
             {
                 static if (hasSliceToEnd)
-                    return chunks(_source[$ .. $], _chunkSize);
+                    return chunks(_source[$ .. $], _chunkSize, _slideSize);
                 else
                 {
                     immutable len = _source.length;
-                    return chunks(_source[len .. len], _chunkSize);
+                    return chunks(_source[len .. len], _chunkSize, _slideSize);
                 }
             }
             typeof(this) opSlice(size_t lower, DollarToken)
@@ -6397,11 +6404,11 @@ struct Chunks(Source)
                 import std.algorithm : min;
                 assert(lower <= length, "chunks slicing index out of bounds");
                 static if (hasSliceToEnd)
-                    return chunks(_source[min(lower * _chunkSize, _source.length) .. $], _chunkSize);
+                    return chunks(_source[min(lower * _chunkSize, _source.length) .. $], _chunkSize, _slideSize);
                 else
                 {
                     immutable len = _source.length;
-                    return chunks(_source[min(lower * _chunkSize, len) .. len], _chunkSize);
+                    return chunks(_source[min(lower * _chunkSize, len) .. len], _chunkSize, _slideSize);
                 }
             }
             typeof(this) opSlice(DollarToken, size_t upper)
@@ -6439,13 +6446,21 @@ struct Chunks(Source)
 private:
     Source _source;
     size_t _chunkSize;
+    size_t _slideSize;
 }
 
 /// Ditto
 Chunks!Source chunks(Source)(Source source, size_t chunkSize)
 if (isForwardRange!Source)
 {
-    return typeof(return)(source, chunkSize);
+    return typeof(return)(source, chunkSize, chunkSize);
+}
+
+/// Ditto
+Chunks!Source chunks(Source)(Source source, size_t chunkSize, size_t slideSize)
+if (isForwardRange!Source)
+{
+    return typeof(return)(source, chunkSize, slideSize);
 }
 
 ///
@@ -6461,6 +6476,18 @@ if (isForwardRange!Source)
     assert(chunks.front == chunks[0]);
     assert(chunks.length == 3);
     assert(equal(retro(array(chunks)), array(retro(chunks))));
+}
+
+///
+@safe unittest
+{
+    import std.algorithm : equal;
+    auto source = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    auto chunks = chunks(source, 4, 2);
+    assert(chunks[0] == [1, 2, 3, 4]);
+    assert(chunks[1] == [3, 4, 5, 6]);
+    assert(chunks[2] == [5, 6, 7, 8]);
+    assert(chunks[3] == [7, 8, 9, 10]);
 }
 
 @safe unittest
