@@ -6745,7 +6745,7 @@ private struct OnlyResult(T, size_t arity)
         return frontIndex >= backIndex;
     }
 
-    T front() @property
+    ref T front() @property
     {
         assert(!empty);
         return data[frontIndex];
@@ -6757,7 +6757,7 @@ private struct OnlyResult(T, size_t arity)
         ++frontIndex;
     }
 
-    T back() @property
+    ref T back() @property
     {
         assert(!empty);
         return data[backIndex - 1];
@@ -6781,7 +6781,7 @@ private struct OnlyResult(T, size_t arity)
 
     alias opDollar = length;
 
-    T opIndex(size_t idx)
+    ref T opIndex(size_t idx)
     {
         // when i + idx points to elements popped
         // with popBack
@@ -6816,6 +6816,13 @@ private struct OnlyResult(T, size_t arity)
     }
     else
         private T[arity] data;
+}
+
+// can you sort an OnlyResult?
+unittest
+{
+    import std.algorithm : sort, equal;
+    assert(only(3,1,2).sort.equal(only(1,2,3)));
 }
 
 // Specialize for single-element results
