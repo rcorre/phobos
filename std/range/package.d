@@ -6789,6 +6789,29 @@ private struct OnlyResult(T, size_t arity)
         return data[frontIndex + idx];
     }
 
+    static if (isMutable!T)
+    {
+        T front(T val) @property
+        {
+            assert(!empty);
+            return data[frontIndex] = val;
+        }
+
+        T back(T val) @property
+        {
+            assert(!empty);
+            return data[backIndex - 1] = val;
+        }
+
+        T opIndexAssign(T val, size_t idx)
+        {
+            // when i + idx points to elements popped
+            // with popBack
+            assert(idx < length);
+            return data[frontIndex + idx] = val;
+        }
+    }
+
     OnlyResult opSlice()
     {
         return this;
@@ -7090,6 +7113,17 @@ unittest
     static struct Test { int* a; }
     immutable(Test) test;
     cast(void)only(test, test); // Works with mutable indirection
+}
+
+// Test sorting an OnlyResult
+unittest
+{
+    import std.algorithm : sort, equal;
+    import std.algorithm;
+    auto r = only(3,1,2);
+    r[0] = 5;
+    assert(r.front == 5);
+    auto rs = r.sort!("a < b", SwapStrategy.stable);
 }
 
 /**
