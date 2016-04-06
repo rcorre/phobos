@@ -7156,10 +7156,9 @@ unittest
  * Returns:
  *     The current value of the field or property
  */
-Field getField(Field, Obj)(auto ref Obj obj, string name)
+T getField(T, Obj)(Obj obj, string name)
 {
-    enum refObj = !is(Obj == class) && (Obj.sizeof > 16);
-    return rtFieldDispatch!(false, Field, false, Obj, refObj)(obj, name);
+    return obj.refField!T(name);
 }
 
 ///
@@ -7209,11 +7208,9 @@ Field getField(Field, Obj)(auto ref Obj obj, string name)
  *     name = the name of the field or property member
  *     value = will be set to the current value of the field or property
  */
-void getField(Field, Obj)(auto ref Obj obj, string name, out Field value)
+void getField(T, Obj)(Obj obj, string name, out T val)
 {
-    enum refField = !is(Field == class) && (Field.sizeof > 16);
-    enum refObj = !is(Obj == class) && (Obj.sizeof > 16);
-    value = rtFieldDispatch!(false, Field, refField, Obj, refObj)(obj, name);
+    val = obj.refField!T(name);
 }
 
 ///
@@ -7265,15 +7262,16 @@ void getField(Field, Obj)(auto ref Obj obj, string name, out Field value)
  * Returns:
  *     A reference to the field, or to the property's current value
  */
-ref Field refField(Field, Obj)(Obj obj, string name) if (is(Obj == class))
-{
-    return rtFieldDispatch!(false, Field, true, Obj, false)(obj, name);
-}
+auto ref T refField(T, Obj)(ref Obj obj, string name) {
+    auto ref T member(string m)() { return __traits(getMember, obj, m); }
+    foreach(m ; __traits(allMembers, Obj))
+    {
+        static if (is(typeof(member!m()) : T))
+            if (m == name)
+                return member!m();
+    }
 
-/// ditto
-ref Field refField(Field, Obj)(return ref Obj obj, string name) if (!is(Obj == class))
-{
-    return rtFieldDispatch!(false, Field, true, Obj, true)(obj, name);
+    assert(0, "member not found");
 }
 
 ///
@@ -7329,11 +7327,18 @@ ref Field refField(Field, Obj)(return ref Obj obj, string name) if (!is(Obj == c
  *     name = the name of the field or property member
  *     value = the new value to assign to the member
  */
-void setField(Field, Obj)(auto ref Obj obj, string name, auto ref Field value)
+void setField(T, Obj)(ref Obj obj, string name, T val)
 {
-    enum refField = !is(Field == class) || (Field.sizeof > 16);
-    enum refObj = !is(Obj == class) || (Obj.sizeof > 16);
-    rtFieldDispatch!(true, Field, refField, Obj, refObj)(obj, name, value);
+    void set(string m)() { __traits(getMember, obj, m) = val; }
+
+    foreach(m ; __traits(allMembers, Obj))
+    {
+        static if (__traits(compiles, set!m()))
+            if (m == name)
+                return set!m();
+    }
+
+    assert(0, "member not found");
 }
 
 ///
@@ -7370,38 +7375,4 @@ void setField(Field, Obj)(auto ref Obj obj, string name, auto ref Field value)
     B b;
     b.setField("bar", 38);
     assert(b.getField!int("bar") == 38);
-}
-
-// mixin template for the get/setField functions
-private template rtFieldDispatch(bool set, Field, bool refField, Obj, bool refObj)
-{
-    private enum propMix = (set ? `` : `return `) ~ `mixin("obj." ~ mName)` ~ (
-        set ? ` = value; return;` : `;`);
-    private enum errorMessage = Obj.stringof ~ ` has no ` ~
-        (set ? `assignable` : (refField ? `lvalue ` : ``)) ~ `property with the specified name matching ` ~ Field.stringof;
-    private enum dispMix = (set ? `void` : (refField ? `ref Field` : `Field`)) ~ ` rtFieldDispatch(` ~ (
-            refObj ? (!set && refField ? `return ` : ``) ~ `ref ` : ``) ~ `Obj obj, string name` ~ (
-            set ? `, ` ~ (refField ? `ref ` : ``) ~ `Field value` : ``) ~ `)
-    {
-        ` ~ (
-            set ? `void` : (refField ? `ref ` : ``) ~ `Field`) ~ ` checkType(string mName)() pure @safe
-        {
-            if (!__ctfe) assert (0);
-            ` ~ propMix ~ `
-        }
-
-        foreach (mName; __traits (allMembers, Obj))
-        {
-            static if (__traits(compiles, checkType!mName()))
-            {
-                if (mName == name)
-                {
-                    ` ~ propMix ~ `
-                }
-            }
-        }
-
-        assert (0, "`~ errorMessage ~`");
-    } `;
-    mixin(dispMix);
 }
